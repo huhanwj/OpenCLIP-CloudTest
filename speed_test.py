@@ -17,10 +17,9 @@ def parse_args():
     parser.add_argument(
         "--model-arch", 
         required=True, 
-        choices=["ViT-B-16", "ViT-L-14", "ViT-L-14-336", "ViT-H-14", "RN50"],
         help="Specify the architecture (model scale) of Chinese-CLIP model for speed comparison."
     )
-    parser.add_argument('--pretrained', type=str, default=None, 
+    parser.add_argument('--pretrained', type=str, required=True, default=None, 
                         help='The pretrained model of Open CLIP, if not set, the program will not run Pytorch model.')
 
     parser.add_argument('--batch-size', default=1, type=int, help='The batch-size of the inference input. Default to 1.')
