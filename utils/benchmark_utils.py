@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 The util functions used in inference speed comparison.
+
+Functions from Chinese-CLIP project: https://github.com/OFA-Sys/Chinese-CLIP
 """
 
 from typing import  List

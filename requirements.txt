@@ -1,0 +1,8 @@
+openclip
+huggingface_hub
+Pillow
+torch 
+torchvision
+torchaudio
+timm
+argparse
