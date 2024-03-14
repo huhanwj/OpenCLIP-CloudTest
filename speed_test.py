@@ -44,12 +44,6 @@ def prepare_pytorch_model(args):
     return pt_model,preprocess,tokenizer
 
 
-onnx_execution_provider_map = {
-    "cpu": "CPUExecutionProvider",
-    "cuda": "CUDAExecutionProvider",
-}
-
-
 if __name__ == '__main__':
     args = parse_args()
     
