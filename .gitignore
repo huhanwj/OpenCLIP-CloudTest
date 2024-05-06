@@ -162,3 +162,5 @@ cython_debug/
 # image files
 data/
 *.jpg
+*.bin
+*.xml
