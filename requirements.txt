@@ -1,4 +1,4 @@
-openclip
+open_clip_torch
 huggingface_hub
 Pillow
 torch 
