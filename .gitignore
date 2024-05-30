@@ -164,3 +164,6 @@ data/
 *.jpg
 *.bin
 *.xml
+
+# VLM model
+model/
