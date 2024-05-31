@@ -88,8 +88,9 @@ async def main():
             ))
 
     print("Begin Video capture AND rtp transmission")
-
-    await asyncio.sleep(4)
+    # Keep the video transmission running indefinitely
+    while True:
+        await asyncio.sleep(1)
     # 测试 重传当前发包历史中索引为0的包
     # await video_sender.fast_retransmit(0)
 

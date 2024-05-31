@@ -1,12 +1,13 @@
 # server.py
 import asyncio
-
+import threading
 import cv2
 from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
 import time
 import datetime
+from av.codec.codec import Codec
 
 import logging
 
@@ -34,6 +35,10 @@ peers = {}
 用于小车采集视频并发包,基于aiortc。基于aiohttp发起web请求。
 """
 
+def display_frame(img):
+    cv2.imshow("Live Video", img)
+    cv2.waitKey(1)
+
 async def process_track(track):
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -45,23 +50,25 @@ async def process_track(track):
         while True:
             frame = await track.recv()
             img = frame.to_ndarray(format="rgb24")
-            print("Received a frame:" + str(frame_index) + " at "+ str(time.time()))
-            now_frame_timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f') #- first_frame
+            print("Received a frame:" + str(frame_index) + " at " + str(time.time()))
+            now_frame_timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')
             logging.debug("Received a frame: %s at %s", frame_index, now_frame_timestamp)
-            # rec_interval = (now_frame_timestamp - last_frame_timestamp) * 1000
             frame_index += 1
-            # frameText = "Frame: " + str(frame_index) + " Time: " + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            # cv2.putText(img, frameText, (10, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 0), 1)
 
             # Write the frame to the output video file
             out.write(img)
+
+            # Display the frame in a separate thread
+            threading.Thread(target=display_frame, args=(img,)).start()
+
     except Exception as e:
         print("An error occurred: ", e)
     finally:
         # Release the VideoWriter when done
         out.release()
         print("Recording stopped.")
-
+        # Close the OpenCV window
+        cv2.destroyAllWindows()
 
 async def index(request):
     content = open('index.html', 'r').read()
