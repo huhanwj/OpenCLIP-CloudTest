@@ -6,3 +6,4 @@ torchvision
 torchaudio
 timm
 argparse
+transformer

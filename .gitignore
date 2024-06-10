@@ -162,6 +162,7 @@ cython_debug/
 # image files
 data/
 *.jpg
+*.png
 *.bin
 *.xml
 *.avi
