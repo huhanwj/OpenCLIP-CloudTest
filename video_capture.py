@@ -1,20 +1,10 @@
 # client.py
 import asyncio
-import platform
 import aiohttp
 import av
 import cv2
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaPlayer, MediaRelay
-import time
-
-relay = []
-webcam = []
-
-"""
-用于小车采集视频并发包,基于aiortc。基于aiohttp发起web请求。
-"""
-
 class VideoFrameTrack(VideoStreamTrack):
     """
     A video stream track that relays frames from OpenCV's VideoCapture.
@@ -42,12 +32,6 @@ class VideoFrameTrack(VideoStreamTrack):
 
         return av_frame
 
-
-# # TODO 接收netlink消息，获取需要重传的序列号
-# async def loss_detection_and_retransmit(video_sender):
-#     while True:
-#         await asyncio.sleep(1)
-#         await video_sender.fast_retransmit(0)
 
 
 async def main():
@@ -91,11 +75,7 @@ async def main():
     # Keep the video transmission running indefinitely
     while True:
         await asyncio.sleep(1)
-    # 测试 重传当前发包历史中索引为0的包
-    # await video_sender.fast_retransmit(0)
 
-    # # TODO tx-status接收与重传调用
-    # await loss_detection_and_retransmit(video_sender)
 
     # 传输5秒
     await asyncio.sleep(120)

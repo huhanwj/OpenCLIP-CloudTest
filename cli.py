@@ -2,6 +2,11 @@ import torch
 from PIL import Image
 from transformers import AutoModel, AutoTokenizer
 import cv2
+import threading
+
+def display_frame(img):
+    cv2.imshow("Live Video", img)
+    cv2.waitKey(1)
 
 model = AutoModel.from_pretrained('openbmb/MiniCPM-Llama3-V-2_5-int4', trust_remote_code=True)
 model = model.to(device='cuda')
@@ -10,7 +15,7 @@ tokenizer = AutoTokenizer.from_pretrained('openbmb/MiniCPM-Llama3-V-2_5-int4', t
 model.eval()
 
 # Open the video stream from the remote side
-video_stream_url = 'rtsp://192.168.50.70/live'  # Replace with the actual URL of the remote video stream
+video_stream_url = 'udp://localhost:5000'  # Replace with the actual URL of the remote video stream
 video_capture = cv2.VideoCapture(video_stream_url)
 image_path = input("Image path (or press Enter to skip): ")
 if image_path:
@@ -19,6 +24,7 @@ else:
     image = None
 
 while True:
+    
     question = input("User: ")
     if question.lower() == 'exit':
         break
@@ -27,6 +33,7 @@ while True:
     ret, frame = video_capture.read()
     if not ret:
         print("Failed to capture frame from the video stream. Use normal picture instead!")
+        break
         image = Image.open(image_path).convert('RGB')
         # break
     else:
@@ -36,6 +43,8 @@ while True:
 
         # Convert the frame to PIL Image format
         image = Image.fromarray(frame_rgb)
+        # Display the frame in a separate thread
+        threading.Thread(target=display_frame, args=(image,)).start()
 
     msgs = [{'role': 'user', 'content': question}]
 
