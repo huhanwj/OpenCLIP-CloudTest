@@ -6,25 +6,9 @@ from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaRelay
 import time
-import datetime
-from av.codec.codec import Codec
-
+import pyvirtualcam
+from pyvirtualcam import PixelFormat
 import logging
-
-# Define the current time in a format suitable for a filename
-current = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-try:
-    current = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-
-    logging.basicConfig(
-        level=logging.DEBUG,
-        filename=f"Log/video_log_{current}.log",
-        filemode='a',
-        format='%(asctime)s - [%(levelname)s] - %(message)s'
-    )
-except Exception as e:
-    print(f"Logging setup failed: {e}")
-
 
 relay = MediaRelay()
 
@@ -34,52 +18,55 @@ peers = {}
 """
 用于小车采集视频并发包,基于aiortc。基于aiohttp发起web请求。
 """
-
-def display_frame(img):
-    cv2.imshow("Live Video", img)
-    cv2.waitKey(1)
-
 async def process_track(track):
-    # Define the codec and create VideoWriter object
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter("record_ori.avi", fourcc, 60, (1920, 1080))
-
-    print("Recording!")
+    print("Streaming!")
     frame_index = 1
-    try:
-        while True:
-            frame = await track.recv()
-            img = frame.to_ndarray(format="rgb24")
-            print("Received a frame:" + str(frame_index) + " at " + str(time.time()))
-            now_frame_timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')
-            logging.debug("Received a frame: %s at %s", frame_index, now_frame_timestamp)
-            frame_index += 1
 
-            # Write the frame to the output video file
-            out.write(img)
+    # Initialize virtual camera. Adjust the preferred_fps as needed.
+    async def main():
+        with pyvirtualcam.Camera(width=1280, height=720, fps=30, fmt=PixelFormat.BGR) as cam:
+            print(f'Using virtual camera: {cam.device}')
+            frame_index = 0
+            try:
+                while True:
+                    frame = await track.recv()  # Assuming track is defined and recv() is properly awaited
+                    img = frame.to_ndarray(format="bgr24")
 
-            # Display the frame in a separate thread
-            threading.Thread(target=display_frame, args=(img,)).start()
+                    # Utilize CUDA operations if possible
+                    if cv2.cuda.getCudaEnabledDeviceCount() > 0:
+                        gpu_frame = cv2.cuda_GpuMat()
+                        gpu_frame.upload(img)
+                        # Perform any GPU-based operations here
+                        processed_img = gpu_frame.download()
+                    else:
+                        processed_img = img  # Fallback to CPU processing if CUDA is not available
 
-    except Exception as e:
-        print("An error occurred: ", e)
-    finally:
-        # Release the VideoWriter when done
-        out.release()
-        print("Recording stopped.")
+                    print(f"Received a frame: {frame_index} at {time.time()}")
+
+                    # Send the frame to the virtual camera
+                    cam.send(processed_img)
+                    cam.sleep_until_next_frame()
+
+                    frame_index += 1
+            except Exception as e:
+                print("An error occurred: ", e)
+            finally:
+                print("Streaming stopped.")
+
         # Close the OpenCV window
-        cv2.destroyAllWindows()
+        # cv2.destroyAllWindows()
+
 
 async def index(request):
-    content = open('index.html', 'r').read()
-    return web.Response(content_type='text/html', text=content)
+    content = open("index.html", "r").read()
+    return web.Response(content_type="text/html", text=content)
 
 
 async def offer(request):
     params = await request.json()
     offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
 
-    #连接建立与管理
+    # 连接建立与管理
     pc = RTCPeerConnection()
     pc_id = "peer_connection_{}".format(len(peers))
     peers[pc_id] = pc
@@ -101,17 +88,16 @@ async def offer(request):
     answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
 
-    return web.json_response({
-        "sdp": pc.localDescription.sdp,
-        "type": pc.localDescription.type
-    })
+    return web.json_response(
+        {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
+    )
 
 
-#启动web服务器
+# 启动web服务器
 app = web.Application()
-app.router.add_get('/', index)
-#offer响应视频轨道请求
-app.router.add_post('/offer', offer)
+app.router.add_get("/", index)
+# offer响应视频轨道请求
+app.router.add_post("/offer", offer)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     web.run_app(app, port=8080)

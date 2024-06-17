@@ -23,7 +23,7 @@ class VideoFrameTrack(VideoStreamTrack):
             raise Exception("Could not read frame from OpenCV VideoCapture")
 
         # Convert the frame from BGR to RGB
-        # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         # Create a raw pyav.VideoFrame from the RGB frame
         av_frame = av.VideoFrame.from_ndarray(frame, format='rgb24')
@@ -39,9 +39,9 @@ async def main():
 
     # 获取视频源
     # OpenCV's video capture object
-    capture = cv2.VideoCapture(2)
-    capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+    capture = cv2.VideoCapture('test.mp4')
+    capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
     # Relay is used to reuse the same video source across multiple consumers
     relay = MediaRelay()

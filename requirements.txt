@@ -7,3 +7,5 @@ torchaudio
 timm
 argparse
 transformer
+bitsandbytes
+accelerate

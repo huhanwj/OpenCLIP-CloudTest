@@ -2,68 +2,124 @@ import torch
 from PIL import Image
 from transformers import AutoModel, AutoTokenizer
 import cv2
+import asyncio
 import threading
-
-def display_frame(img):
-    cv2.imshow("Live Video", img)
-    cv2.waitKey(1)
-
+import cv2
+from aiohttp import web
+from aiortc import RTCPeerConnection, RTCSessionDescription
+from aiortc.contrib.media import MediaRelay
+import queue
 model = AutoModel.from_pretrained('openbmb/MiniCPM-Llama3-V-2_5-int4', trust_remote_code=True)
-model = model.to(device='cuda')
 
 tokenizer = AutoTokenizer.from_pretrained('openbmb/MiniCPM-Llama3-V-2_5-int4', trust_remote_code=True)
 model.eval()
+peers = {}
 
-# Open the video stream from the remote side
-video_stream_url = 'udp://localhost:5000'  # Replace with the actual URL of the remote video stream
-video_capture = cv2.VideoCapture(video_stream_url)
-image_path = input("Image path (or press Enter to skip): ")
-if image_path:
-    image = Image.open(image_path).convert('RGB')
-else:
-    image = None
+message_queue = queue.Queue()
+input_queue = queue.Queue()
 
-while True:
-    
-    question = input("User: ")
-    if question.lower() == 'exit':
-        break
+def display_frame(message_queue):
+    while True:
+        if not message_queue.empty():
+            img = message_queue.get()
+            cv2.imshow("Live Video", img)
+            cv2.waitKey(1)
 
-    # Capture the current frame from the video stream
-    ret, frame = video_capture.read()
-    if not ret:
-        print("Failed to capture frame from the video stream. Use normal picture instead!")
-        break
-        image = Image.open(image_path).convert('RGB')
-        # break
-    else:
+def handle_input(input_queue):
+    while True:
+        question = input("User: ")
+        input_queue.put(question)
+        if question.lower() == 'exit':
+            break
 
-        # Convert the frame from BGR to RGB format
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+process_thread = threading.Thread(target=display_frame, args=(message_queue,))
+input_thread = threading.Thread(target=handle_input, args=(input_queue,))
 
-        # Convert the frame to PIL Image format
-        image = Image.fromarray(frame_rgb)
-        # Display the frame in a separate thread
-        threading.Thread(target=display_frame, args=(image,)).start()
+process_thread.start()
+input_thread.start()
 
-    msgs = [{'role': 'user', 'content': question}]
+async def process_track(track):
+    print("Recording!")
+    frame_index = 1
+    try:
+        while True:
+            frame = await track.recv()
+            img = frame.to_ndarray(format="bgr24")
+            message_queue.put(img)
+            frame_index += 1
 
-    res = model.chat(
-        image=image,
-        msgs=msgs,
-        tokenizer=tokenizer,
-        sampling=True,
-        temperature=0.7,
-        stream=True
-    )
+            if not input_queue.empty():
+                question = input_queue.get()
+                if question.lower() == 'exit':
+                    break
 
-    print("Assistant: ", end='')
-    generated_text = ""
-    for new_text in res:
-        generated_text += new_text
-        print(new_text, flush=True, end='')
-    print()
+                msgs = [{'role': 'user', 'content': question}]
 
-# Release the video capture and close windows
-video_capture.release()
-cv2.destroyAllWindows()
+                if not message_queue.empty():
+                    img = message_queue.get()
+                    res = model.chat(
+                        image=img,
+                        msgs=msgs,
+                        tokenizer=tokenizer,
+                        sampling=True,
+                        temperature=0.7,
+                        stream=True
+                    )
+
+                    print("Assistant: ", end='')
+                    generated_text = ""
+                    for new_text in res:
+                        generated_text += new_text
+                        print(new_text, flush=True, end='')
+                    print()
+
+    except Exception as e:
+        print("An error occurred: ", e)
+    finally:
+        cv2.destroyAllWindows()
+
+async def index(request):
+    content = open('index.html', 'r').read()
+    return web.Response(content_type='text/html', text=content)
+
+
+async def offer(request):
+    params = await request.json()
+    offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+
+    #连接建立与管理
+    pc = RTCPeerConnection()
+    pc_id = "peer_connection_{}".format(len(peers))
+    peers[pc_id] = pc
+
+    @pc.on("track")
+    async def on_track(track):
+        print("Track %s received" % track.kind)
+
+        if track.kind == "video":
+            original_track = track
+            # 创建一个任务以处理接收到的视频轨
+            asyncio.create_task(process_track(original_track))
+
+        @track.on("ended")
+        async def on_ended():
+            print("Track %s ended", track.kind)
+
+    await pc.setRemoteDescription(offer)
+    answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
+
+    return web.json_response({
+        "sdp": pc.localDescription.sdp,
+        "type": pc.localDescription.type
+    })
+
+
+#启动web服务器
+app = web.Application()
+app.router.add_get('/', index)
+#offer响应视频轨道请求
+app.router.add_post('/offer', offer)
+
+web.run_app(app, port=8080)
+
