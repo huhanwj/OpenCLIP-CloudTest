@@ -1,6 +1,8 @@
+import datetime
 import torch
 from PIL import Image
 from transformers import AutoModel, AutoTokenizer
+from transformers import BlipProcessor, BlipForQuestionAnswering
 import cv2
 import asyncio
 import threading
@@ -16,7 +18,6 @@ model.eval()
 peers = {}
 
 message_queue = queue.Queue()
-input_queue = queue.Queue()
 
 def display_frame(message_queue):
     while True:
@@ -25,15 +26,33 @@ def display_frame(message_queue):
             cv2.imshow("Live Video", img)
             cv2.waitKey(1)
 
-def handle_input(input_queue):
+def handle_input(message_queue):
     while True:
         question = input("User: ")
-        input_queue.put(question)
-        if question.lower() == 'exit':
-            break
+        msgs = [{'role': 'user', 'content': question}]
+        frame = message_queue.get()
+        img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        frameText = "Time: " + str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        # cv2.putText(img, frameText, (10, 30), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 0), 1)
+        # cv2.imwrite("1.png",frame)
+        img.save("1.png")
+        res = model.chat(
+            image=img,
+            msgs=msgs,
+            tokenizer=tokenizer,
+            sampling=True,
+            temperature=0.7,
+            stream=True
+        )
+        print("Assistant: ", end='')
+        generated_text = ""
+        for new_text in res:
+            generated_text += new_text
+            print(new_text, flush=True, end='')
+        print()
 
 process_thread = threading.Thread(target=display_frame, args=(message_queue,))
-input_thread = threading.Thread(target=handle_input, args=(input_queue,))
+input_thread = threading.Thread(target=handle_input, args=(message_queue,))
 
 process_thread.start()
 input_thread.start()
@@ -43,35 +62,11 @@ async def process_track(track):
     frame_index = 1
     try:
         while True:
+            global message_queue
             frame = await track.recv()
             img = frame.to_ndarray(format="bgr24")
             message_queue.put(img)
             frame_index += 1
-
-            if not input_queue.empty():
-                question = input_queue.get()
-                if question.lower() == 'exit':
-                    break
-
-                msgs = [{'role': 'user', 'content': question}]
-
-                if not message_queue.empty():
-                    img = message_queue.get()
-                    res = model.chat(
-                        image=img,
-                        msgs=msgs,
-                        tokenizer=tokenizer,
-                        sampling=True,
-                        temperature=0.7,
-                        stream=True
-                    )
-
-                    print("Assistant: ", end='')
-                    generated_text = ""
-                    for new_text in res:
-                        generated_text += new_text
-                        print(new_text, flush=True, end='')
-                    print()
 
     except Exception as e:
         print("An error occurred: ", e)
