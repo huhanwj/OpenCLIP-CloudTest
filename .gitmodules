@@ -1,0 +1,6 @@
+[submodule "vllm"]
+	path = vllm
+	url = https://github.com/OpenBMB/vllm.git
+[submodule "Flash-VStream"]
+	path = Flash-VStream
+	url = https://github.com/IVGSZ/Flash-VStream.git
