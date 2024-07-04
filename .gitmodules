@@ -1,0 +1,3 @@
+[submodule "Flash-VStream"]
+	path = Flash-VStream
+	url = https://github.com/huhanwj/Flash-VStream
